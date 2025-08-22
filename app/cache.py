@@ -16,9 +16,16 @@ class Cache:
 
 	def get_or_set(self, namespace: str, key_obj: Any, ttl_seconds: int, producer: Callable[[], Any]):
 		key = self._key(namespace, key_obj)
-		cached = self._redis.get(key)
-		if cached is not None:
-			return json.loads(cached)
+		try:
+			cached = self._redis.get(key)
+			if cached is not None:
+				return json.loads(cached)
+		except Exception:
+			# Redis unavailable: compute fresh value and return without caching
+			return producer()
 		value = producer()
-		self._redis.setex(key, ttl_seconds, json.dumps(value, default=str))
+		try:
+			self._redis.setex(key, ttl_seconds, json.dumps(value, default=str))
+		except Exception:
+			pass
 		return value
