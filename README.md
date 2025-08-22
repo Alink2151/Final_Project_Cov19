@@ -245,3 +245,63 @@ REDIS_URL=redis://localhost:6379/0
 # Report
 STUDENT_NAME=Ada Lovelace
 ```
+
+## 20) Database Schemas and Models
+
+### Snowflake (Analytical Store)
+- **Database/Schema**: `COVID_APP.PUBLIC`
+- **Views** (proxied from Starschema provider):
+  - `V_JHU_GLOBAL` → mirrors provider `JHU_GLOBAL`
+    - Fields commonly used by this app:
+      - `DATE` (DATE)
+      - `COUNTRY_REGION` (STRING)
+      - `PROVINCE_STATE` (STRING, nullable)
+      - `NEW_CONFIRMED` (NUMBER)
+      - `NEW_DEATHS` (NUMBER)
+    - Typical keys: [`COUNTRY_REGION`, `PROVINCE_STATE`, `DATE`]
+    - Example usage: time series aggregation by `DATE`, country-level clustering via sums/averages
+  - `V_JHU_US` → mirrors provider `JHU_US` (county-level granularity)
+
+- **Pattern Recognition View**: `V_PATTERN_SURGE`
+  - Built via `MATCH_RECOGNIZE` over `V_JHU_GLOBAL`
+  - Columns (output):
+    - `COUNTRY_REGION` (STRING)
+    - `START_DATE` (DATE) — first date in detected surge
+    - `END_DATE` (DATE) — last date in detected surge
+    - `AVG_CASES` (FLOAT) — average `NEW_CONFIRMED` across the surge window
+  - Partitioned by `COUNTRY_REGION`, ordered by `DATE`
+
+Note: The Starschema provider may evolve field names. If a view breaks, query `INFORMATION_SCHEMA.TABLES` on the provider DB and adjust `sql/setup_warehouse_and_views.sql` accordingly.
+
+### MongoDB (Operational Store)
+- **Database**: from `MONGO_DB` (default `covid_app`)
+- **Collection**: `comments`
+- **Document schema** (see `app/mongo_schema.json`):
+  - `country`: string (required)
+  - `region`: string | null (optional)
+  - `date`: string | null (ISO date, optional)
+  - `text`: string (required)
+  - `created_at`: string | null (ISO timestamp, optional)
+  - `user`: string | null (optional)
+  - Mongo `_id`: ObjectId (auto-generated)
+- **Recommended index (optional)**:
+  - Compound index on `{ country: 1, region: 1, date: 1 }` to speed reads by filters used in `/api/comments`
+- **Example document**:
+  ```json
+  {
+    "_id": "65f1a6...",
+    "country": "United States",
+    "region": null,
+    "date": "2021-01-01",
+    "text": "Case surge likely due to holidays.",
+    "created_at": "2021-01-02T10:00:00Z",
+    "user": "analyst01"
+  }
+  ```
+
+### Redis (Caching Layer)
+- **Connection**: `REDIS_URL` (default `redis://localhost:6379/0`)
+- **Key pattern**: `covid:{namespace}:{sha1(json(key_obj))}`
+  - Namespace examples: `sql`
+  - TTL defined by caller (e.g., timeseries uses `3600` seconds)
+- **Value**: JSON-serialized response payloads used by the API
