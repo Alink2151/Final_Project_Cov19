@@ -19,26 +19,46 @@ app.layout = html.Div([
 
 @app.callback(Output("ts", "figure"), Input("country", "value"))
 def update_ts(country):
-	resp = requests.get(f"{API_BASE}/timeseries", params={"country": country}, timeout=30)
-	df = pd.DataFrame(resp.json())
-	return {
-		"data": [{"x": df["DATE"], "y": df["CASES"], "type": "lines", "name": "Cases"}],
-		"layout": {"title": f"Daily Cases - {country}"}
-	}
+	try:
+		resp = requests.get(f"{API_BASE}/timeseries", params={"country": country}, timeout=30)
+		resp.raise_for_status()
+		data = resp.json()
+		df = pd.DataFrame(data)
+		return {
+			"data": [{"x": df.get("DATE", []), "y": df.get("CASES", []), "type": "lines", "name": "Cases"}],
+			"layout": {"title": f"Daily Cases - {country}"}
+		}
+	except Exception as e:
+		title = f"Timeseries error: {str(e)}"
+		try:
+			preview = resp.text[:200] if 'resp' in locals() else ''
+		except Exception:
+			preview = ''
+		return {"data": [], "layout": {"title": title + (f" | {preview}" if preview else "")}}
 
 
 @app.callback(Output("forecast", "figure"), Input("country", "value"))
 def update_fc(country):
-	resp = requests.get(f"{API_BASE}/forecast", params={"country": country, "horizon": 14}, timeout=30)
-	df = pd.DataFrame(resp.json())
-	return {
-		"data": [
-			{"x": df["DATE"], "y": df["forecast"], "type": "lines", "name": "Forecast"},
-			{"x": df["DATE"], "y": df["lower"], "type": "lines", "name": "Lower", "line": {"dash": "dot"}},
-			{"x": df["DATE"], "y": df["upper"], "type": "lines", "name": "Upper", "line": {"dash": "dot"}},
-		],
-		"layout": {"title": f"Forecast - {country}"}
-	}
+	try:
+		resp = requests.get(f"{API_BASE}/forecast", params={"country": country, "horizon": 14}, timeout=30)
+		resp.raise_for_status()
+		data = resp.json()
+		df = pd.DataFrame(data)
+		return {
+			"data": [
+				{"x": df.get("DATE", []), "y": df.get("forecast", []), "type": "lines", "name": "Forecast"},
+				{"x": df.get("DATE", []), "y": df.get("lower", []), "type": "lines", "name": "Lower", "line": {"dash": "dot"}},
+				{"x": df.get("DATE", []), "y": df.get("upper", []), "type": "lines", "name": "Upper", "line": {"dash": "dot"}},
+			],
+			"layout": {"title": f"Forecast - {country}"}
+		}
+	except Exception as e:
+		title = f"Forecast error: {str(e)}"
+		try:
+			preview = resp.text[:200] if 'resp' in locals() else ''
+		except Exception:
+			preview = ''
+		return {"data": [], "layout": {"title": title + (f" | {preview}" if preview else "")}}
 
 
 if __name__ == "__main__":
