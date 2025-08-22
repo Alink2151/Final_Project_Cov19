@@ -100,3 +100,148 @@ README.md
 
 ## 12) Notes on Starschema Tables
 Names may vary over time. This project references common ones like `JHU_GLOBAL` and `JHU_US`. If views fail to create, query `INFORMATION_SCHEMA.TABLES` under the provider DB to identify current names and adjust `sql/setup_warehouse_and_views.sql` accordingly.
+
+## 13) API Reference
+Base URL: `http://localhost:${API_PORT:-8000}/api`
+
+- Health
+  - GET `/health`
+  - 200 → `{ "status": "ok" }`
+
+- Timeseries
+  - GET `/timeseries?country=United%20States`
+  - Returns array of records with fields: `DATE`, `CASES`
+  - Example:
+    ```bash
+    curl "http://localhost:8000/api/timeseries?country=United%20States"
+    ```
+
+- Forecast
+  - GET `/forecast?country=United%20States&horizon=14`
+  - Returns array with fields: `DATE`, `forecast`, `lower`, `upper`
+  - Example:
+    ```bash
+    curl "http://localhost:8000/api/forecast?country=United%20States&horizon=14"
+    ```
+
+- Clusters
+  - GET `/clusters?k=5`
+  - Returns country-level metrics plus `cluster` label; fields include: `COUNTRY_REGION`, `total_cases`, `total_deaths`, `avg_daily_cases`, `cases_per_100k`, `deaths_per_100k`, `growth_rate`, `cluster`
+  - Example:
+    ```bash
+    curl "http://localhost:8000/api/clusters?k=5"
+    ```
+
+- Pattern Recognition
+  - GET `/pattern?country=United%20States`
+  - Returns rows from `V_PATTERN_SURGE` for the given country
+
+- Comments
+  - POST `/comments`
+    - Body (JSON): `{ "country": "United States", "region": null, "date": "2021-01-01", "text": "Insight..." }`
+    - 200 → `{ "inserted_id": "..." }`
+    - Example:
+      ```bash
+      curl -X POST http://localhost:8000/api/comments \
+        -H 'Content-Type: application/json' \
+        -d '{"country":"United States","date":"2021-01-01","text":"Insight"}'
+      ```
+  - GET `/comments?country=United%20States&region=CA`
+    - Returns list of comment documents
+
+
+## 14) Environment Variables
+- Snowflake
+  - `SNOWFLAKE_ACCOUNT` (required)
+  - `SNOWFLAKE_USER` (required)
+  - `SNOWFLAKE_PASSWORD` (required)
+  - `SNOWFLAKE_ROLE` (default: `SYSADMIN`)
+  - `SNOWFLAKE_WAREHOUSE` (default: `COVID_WH`)
+  - `SNOWFLAKE_DATABASE` (default: `COVID_APP`)
+  - `SNOWFLAKE_SCHEMA` (default: `PUBLIC`)
+- API/App
+  - `API_HOST` (default: `0.0.0.0`)
+  - `API_PORT` (default: `8000`)
+  - `SECRET_KEY` (default: `change-me`)
+  - `FLASK_ENV` (default: `development`)
+  - `FLASK_DEBUG` (default: `0`; set `1` to enable debug)
+- Dashboard
+  - `DASH_HOST` (default: `0.0.0.0`)
+  - `DASH_PORT` (default: `8050`)
+  - `API_BASE` (default used by Dash: `http://localhost:8000/api`)
+- MongoDB
+  - `MONGO_URI` (default: `mongodb://localhost:27017`)
+  - `MONGO_DB` (default: `covid_app`)
+- Redis
+  - `REDIS_URL` (default: `redis://localhost:6379/0`)
+- Reporting
+  - `STUDENT_NAME` (used in generated DOCX report)
+
+
+## 15) Docker and Local Services
+- Start MongoDB and Redis locally via Docker:
+  ```bash
+  docker compose up -d
+  ```
+- Containers expose default ports `27017` (Mongo) and `6379` (Redis). The app defaults target `localhost`, so no extra config is needed when running locally with Compose.
+- If using remote services, set `MONGO_URI` and `REDIS_URL` accordingly.
+
+
+## 16) Dashboard Notes
+- Run with: `python dashboard/app.py` (ensure `.env` is loaded so `API_BASE` is correct if your API runs on a different host/port).
+- Interactive components:
+  - Country input field drives both time series and forecast graphs.
+
+
+## 17) EDA Outputs
+Running `eda/eda_automation.py` produces files under `eda/output/`:
+- `profiles.json` — schema profiles for key views
+- `global_timeseries.csv` — aggregated by `COUNTRY_REGION, DATE`
+- `summary.html` — simple HTML summary
+
+
+## 18) Troubleshooting
+- Missing env var at startup:
+  - The app raises: "Missing required environment variable"; ensure `.env` is populated or variables are exported in the shell.
+- Snowflake connection errors:
+  - Verify `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`, and that the role/warehouse/database exist.
+  - Ensure Starschema view names used in SQL exist in your provider DB; adjust `sql/setup_warehouse_and_views.sql` if needed.
+- Redis `Connection refused`:
+  - Start Redis (`docker compose up -d`) or update `REDIS_URL`.
+- MongoDB `Connection refused`:
+  - Start MongoDB (`docker compose up -d`) or update `MONGO_URI`.
+- Dashboard cannot reach API (CORS/network):
+  - CORS is enabled. Ensure `API_BASE` points to your API (e.g., `http://localhost:8000/api`).
+- Slow forecasts:
+  - Reduce `horizon` parameter or pre-cache results.
+
+
+## 19) Example `.env`
+```bash
+# Snowflake
+SNOWFLAKE_ACCOUNT=abc-xy123
+SNOWFLAKE_USER=my_user
+SNOWFLAKE_PASSWORD=your_password
+SNOWFLAKE_ROLE=SYSADMIN
+SNOWFLAKE_WAREHOUSE=COVID_WH
+SNOWFLAKE_DATABASE=COVID_APP
+SNOWFLAKE_SCHEMA=PUBLIC
+
+# API/Dashboard
+API_HOST=0.0.0.0
+API_PORT=8000
+DASH_HOST=0.0.0.0
+DASH_PORT=8050
+FLASK_ENV=development
+FLASK_DEBUG=1
+SECRET_KEY=change-me
+API_BASE=http://localhost:8000/api
+
+# Mongo/Redis
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB=covid_app
+REDIS_URL=redis://localhost:6379/0
+
+# Report
+STUDENT_NAME=Ada Lovelace
+```
