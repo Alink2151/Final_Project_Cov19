@@ -1,0 +1,7 @@
+-- Example pattern recognition for sustained case increases
+USE ROLE SYSADMIN;
+USE WAREHOUSE COVID_WH;
+USE DATABASE COVID_APP;
+USE SCHEMA PUBLIC;
+
+SELECT * FROM V_PATTERN_SURGE LIMIT 100;
