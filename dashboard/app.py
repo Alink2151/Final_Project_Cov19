@@ -42,4 +42,4 @@ def update_fc(country):
 
 
 if __name__ == "__main__":
-	app.run_server(host=os.getenv("DASH_HOST", "0.0.0.0"), port=int(os.getenv("DASH_PORT", "8050")), debug=True)
+	app.run(host=os.getenv("DASH_HOST", "0.0.0.0"), port=int(os.getenv("DASH_PORT", "8050")), debug=True)
